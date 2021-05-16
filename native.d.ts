@@ -91,8 +91,8 @@ declare namespace array {
 
 
 declare namespace assert {
-    export function contains(value: string, search: string): void
-    export function equal(a: any, b: any): void
+    export function contains(search: string, value: string): void
+    export function equal(a: any, b: any, errorMessage?: string): void
     export function isNull(a: any): void
 	export function isNotNull(a: any): void
 	export function exception(msg: string, func: Function): void
@@ -177,6 +177,12 @@ declare namespace bufio {
 
 
 
+
+declare namespace ast {
+	export interface Program {
+		string(): string
+	}
+}
 	
 declare namespace bytecode {
     /**
@@ -190,6 +196,8 @@ declare namespace bytecode {
 	export function hash(path: string, fileSystem?: io.FileSystem): string
 
     export function compileStr(code: string): runtime.Program
+
+    export function parseStr(code: string): ast.Program
 
     /**
      * Load a binary program from the file system
@@ -323,24 +331,24 @@ declare namespace encoding {
 
 
 
+declare namespace errors {
+	export function parse(err: string): Error
+	export function newError(msg: string, ...args: any[]): Error
+	export function newTypeError(type: string, msg: string, ...args: any[]): Error
+	export function unwrap(err: Error): Error
+	export function is(err: Error, type: string): Error
+	export function rethrow(err: Error): void
 
-	declare namespace errors {
-		export function newError(msg: string): Error
-		export function wrap(msg: string, inner: Error): Error
-		export function public(msg: string, inner?: Error | string): Error
-	
-		export function is(err: Error, msg: string): Error
-		export function rethrow(err: Error): void
+	export interface Error {
+		type: string
+		message: string
+		pc: number
+		stackTrace: string
+		string(): string
+		is(error: string): boolean
+	} 
+}
 
-		export interface Error {
-			public: boolean
-			message: string
-			pc: number
-			stackTrace: string
-			toString(): string
-			is(error: string): boolean
-		}
-	}
 
 
 
@@ -398,6 +406,7 @@ declare namespace fmt {
 	export function fprintf(w: io.Writer, format: string, ...params: any[]): void
 	
     export function errorf(format: string, ...params: any[]): errors.Error
+    export function typeErrorf(type: string, format: string, ...params: any[]): errors.Error
 }	
 	
 
@@ -476,6 +485,14 @@ declare namespace html {
 
 
 declare namespace http {
+	export const OK: number
+	export const REDIRECT: number
+	export const BAD_REQUEST: number
+	export const UNAUTHORIZED: number
+	export const NOT_FOUND: number
+	export const INTERNAL_ERROR: number
+	export const UNAVAILABLE: number
+
 	export type SameSite = number
 	export const SameSiteDefaultMode: SameSite
 	export const SameSiteLaxMode: SameSite
@@ -495,7 +512,7 @@ declare namespace http {
 
     export function parseURL(url?: string): URL
 
-    export type Handler = (w: ResponseWriter, r: Request) => void
+    export type Handler = (w: ResponseWriter, r: Request, routeData?: any) => void
 
     export interface Server {
         address: string
@@ -634,7 +651,7 @@ declare namespace http {
         query: string
 		pathAndQuery: string
 		
-		toString(): string
+		string(): string
     }
 
     // interface FormValues {
@@ -661,6 +678,7 @@ declare namespace http {
         handled: boolean
 
 		body(): string
+		json(): any
 		bytes(): byte[]
 		
         cookie(name: string): Cookie
@@ -676,6 +694,8 @@ declare namespace http {
          * Writes v to the server response.
          */
         write(v: any): number
+
+		writeGziped(v: any): number
 
         /**
          * Writes v to the server response setting json content type if
@@ -764,11 +784,13 @@ declare namespace io {
 
     export function copy(dst: Writer, src: Reader): number
 
-    export function newMemFS(): FileSystem
+    export function newVirtualFS(): FileSystem
 
     export function newRootedFS(root: string, baseFS: FileSystem): FileSystem
 
     export function newRestrictedFS(baseFS: FileSystem): RestrictedFS
+
+    export function newReadOnlyFS(baseFS: FileSystem): FileSystem
 
     /** 
      * Sets the default data file system that will be returned by io.dataFS()
@@ -782,7 +804,7 @@ declare namespace io {
         cap: number
         read(b: byte[]): number
         write(v: any): void
-        toString(): string
+        string(): string
         toBytes(): byte[]
 	}
 
@@ -805,7 +827,7 @@ declare namespace io {
         append(path: string, data: string | byte[]): void
         mkdir(path: string): void
         stat(path: string): FileInfo
-        readDir(path: string): FileInfo[]
+        readDir(path?: string): FileInfo[]
         readNames(path: string, recursive?: boolean): string[]
 	}
 	
@@ -841,18 +863,14 @@ declare namespace ioutil {
 
 
 declare namespace json {
-    export function escapeString(str: string): string
-    export function marshal(v: any, indent?: boolean): string
+    export function marshal(v: any, indent?: boolean, escapeHTML?: boolean): string
     export function unmarshal(str: string | byte[]): any
 
 }
 
 
 
-
-// translate a value.
-declare function T(key: string, ...params: any[]): string
-
+ 
 declare namespace locale {
 	export const defaultLocalizer: Localizer
 	export function setLocalizer(c: Localizer): void
@@ -870,15 +888,18 @@ declare namespace locale {
 
 	export interface Culture {
 		name: string
+		language: string
 		locked: boolean
 		numberOfDecimals: number
 		decimalSeparator: string
 		thousandSeparator: string
 		currencySymbol: string
 		currencyPattern: string
+		dateMonthTimePattern: string
 		dateTimePattern: string
 		shortDatePattern: string
 		longDatePattern: string
+		dateMonthPattern: string
 		shortTimePattern: string
 		firstDayOfWeek: number
 		clone(): Culture
@@ -889,6 +910,7 @@ declare namespace locale {
 	export interface Translator {
 		add(language: string, key: string, translation: string): void
 		languages(): string[]
+		translate(key: string, ...params: any[]): string
 	}
 
 	export function newLocalizer(): Localizer
@@ -1162,6 +1184,14 @@ declare namespace png {
 declare namespace reflect {
     export const program: runtime.Program
 
+	export interface Native {
+		name: string
+		permissions: string[]
+	}
+
+    export function nativeFunctions(): Native[]
+    export function nativeProperties(): Native[]
+
     export function is<T>(v: any, name: string): v is T
 
     export function typeOf(v: any): string
@@ -1197,32 +1227,26 @@ declare namespace regex {
 
 	
 	declare namespace routing {
-		export function newRouter(): Router
-	
-		export interface Router {
-			reset(): void
-			add(r: Route): void
-			match(url: string): RouteMatch | null
-			print(): void
-		}
-	
-		export interface RouteMatch {
-			route: Route
-			data: string[]
-			int(name: string): number
-			string(name: string): string
-		}
-	
 		interface Any {
 			[prop: string]: any
 		}
 
-		export interface Route extends Any {
-			url: string
-			params?: string[]
-			filter?: Function
-			handler: Function
+		export function newRouter(): Router
+	
+		export interface Router {
+			reset(): void
+			add(url: string, route: any): void
+			match(url: string): RouteMatch | null
+			print(): void
+			routes(): any[]
 		}
+	
+		export interface RouteMatch {
+			route: any
+			values: any
+			int(name: string): number
+			string(name: string): string
+		}	
 	}
 
 	
@@ -1274,6 +1298,8 @@ declare namespace runtime {
 
     export function panic(message: string): void
 
+	export function attribute(name: string): string
+
     export type OSName = "linux" | "windows" | "darwin"
 	
     /**
@@ -1291,6 +1317,9 @@ declare namespace runtime {
      */
     export const nativeExecutable: string
 
+	export const context: any
+    export function setContext(c: any): void
+
 	export const vm: VirtualMachine
 
     export function runFunc(func: string, ...args: any[]): any
@@ -1299,7 +1328,7 @@ declare namespace runtime {
     export function resources(name: string): string[]
     export function resource(name: string): byte[]
 
-    export function getStackTrace(): string
+    export function stackTrace(): string
     export function newVM(p: Program, globals?: any[]): VirtualMachine
 
     export interface Program {
@@ -1313,6 +1342,7 @@ declare namespace runtime {
 		attributes(): string[]
 		attribute(name: string): string
 		hasAttribute(name: string): boolean
+		setAttribute(name: string, value: string): string
 
 		permissions(): string[]
 		hasPermission(name: string): boolean
@@ -1322,12 +1352,13 @@ declare namespace runtime {
          * Strip sources, not exported functions name and other info.
          */
         strip(): void
-        toString(): string
+        string(): string
         write(w: io.Writer): void
 	}
 	
     export interface FunctionInfo {
         name: string
+		module: string
         index: number
 		arguments: number
 		optionalArguments: number
@@ -1336,7 +1367,7 @@ declare namespace runtime {
 		attributes(): string[]
 		attribute(name: string): string
 		hasAttribute(name: string): boolean
-        toString(): string
+        string(): string
     }
 
     export interface VirtualMachine {
@@ -1344,21 +1375,23 @@ declare namespace runtime {
 		maxFrames: number
 		maxSteps: number
 		fileSystem: io.FileSystem
+		stdout: io.Writer
 		localizer: locale.Localizer
 		readonly steps: number
 		readonly allocations: number
 		readonly program: Program
 		context: any
 		language: string
+		location: time.Location
+		now: time.Time
 		error: errors.Error
 		initialize(): any[]
 		run(...args: any[]): any
 		runFunc(name: string, ...args: any[]): any
 		runFunc(index: number, ...args: any[]): any
-		runInternal(searchName: string, ...args: any[]): any
 		getValue(name: string): any
 		getGlobals(): any[]
-		getStackTrace(): string
+		stackTrace(): string
 		clone(): VirtualMachine
 		resetSteps(): void
 	}
@@ -1396,7 +1429,7 @@ declare namespace smtp {
         subject: string
         body: string
         html: boolean
-        toString(): string
+        string(): string
         attach(fileName: string, data: byte[], inline: boolean): void
     }
 }
@@ -1408,12 +1441,14 @@ declare namespace smtp {
 
 
 declare namespace sql {
+    export type DriverType = "mysql" | "sqlite3"
+
     /**
      * If you specify a databaseName every query will be parsed and all tables will be
      * prefixed with the database name: "SELECT foo FROM bar" will automatically be converted 
      * to "SELECT databasename.foo FROM bar". 
      */
-    export function open(driver: string, connString: string, databaseName?: string): DB
+    export function open(driver: DriverType, connString: string, databaseName?: string): DB
 	
 	export function setWhitelistFuncs(funcs: string[]): void
 	
@@ -1423,12 +1458,15 @@ declare namespace sql {
      */
     export interface DB {
 		database: string
+		prefix: string
 		namespace: string
         readOnly: boolean
 		locked: boolean
-        driver: string
+        driver: DriverType
 		hasTransaction: boolean
 		
+		initMultiDB(): void
+
 		setMaxOpenConns(v: number): void
 		setMaxIdleConns(v: number): void
 		setConnMaxLifetime(d: time.Duration | number): void
@@ -1513,7 +1551,7 @@ declare namespace sql {
 
     export interface Query {
         parameters: any[]
-        toSQL(format?: boolean, driver?: string, escapeIdents?: boolean): string
+        toSQL(format?: boolean, driver?: DriverType, escapeIdents?: boolean): string
     }
 
     export interface CRUDQuery extends Query {
@@ -1552,6 +1590,7 @@ declare namespace sql {
         and(s: string, ...params: any[]): SelectQuery
         and(filter: SelectQuery): SelectQuery
         or(s: string, ...params: any[]): SelectQuery
+        or(filter: SelectQuery): SelectQuery
         join(s: string, ...params: any[]): SelectQuery
 
         /**
@@ -1589,6 +1628,7 @@ declare namespace sql {
         and(s: string, ...params: any[]): DeleteQuery
         and(filter: DeleteQuery): DeleteQuery
         or(s: string, ...params: any[]): DeleteQuery
+        or(filter: SelectQuery): SelectQuery
         limit(rowCount: number): DeleteQuery
         limit(rowCount: number, offset: number): DeleteQuery
     }
@@ -1605,7 +1645,7 @@ declare namespace sql {
         columns: Array<Column>
     }
 
-    export type ColumnType = "string" | "int" | "float" | "bool" | "datetime"
+    export type ColumnType = "string" | "int" | "decimal" | "bool" | "datetime"
 
     export interface Column {
         name: string
@@ -1628,7 +1668,7 @@ declare namespace strconv {
 
 
     export function formatRef(i: number, length?: number): string
-    export function parseRef(ref: string): int
+    export function parseRef(ref: string): number
 
 }
 
@@ -1997,10 +2037,9 @@ declare namespace time {
     export function unix(seconds: number): Time
 
     export function date(year?: number, month?: number, day?: number, hour?: number, min?: number, sec?: number, loc?: Location): Time
-    export function localDate(year?: number, month?: number, day?: number, hour?: number, min?: number, sec?: number): Time
-
 
 	export function parseDuration(s: string): Duration
+	export function parseTime(s: string): number
 	
     export function duration(nanoseconds: number | Duration): Duration
     export function toDuration(hour: number, minute?: number, second?: number): Duration
@@ -2049,12 +2088,13 @@ declare namespace time {
         addMilliseconds(t: number): Time
 
         setDate(year?: number, month?: number, day?: number): Time
+        addDate(year: number, month: number, day: number): Time
         setTime(hour?: number, minute?: number, second?: number, millisecond?: number): Time
         setTimeMillis(millis: number): Time
 
         format(f: string): string
 		formatIn(f: string, loc: Location): string
-		toISO(): string
+		toString(): string
 		
 		in(loc: Location): Time
         /**
@@ -2094,7 +2134,6 @@ declare namespace time {
     export function sleep(millis: number): void
     export function sleep(d: Duration): void
     export function parse(value: any, format?: string): Time
-    export function parseLocal(value: any, format?: string): Time
     export function parseInLocation(value: any, format: string, location: Location): Time
 	
 	
@@ -2248,7 +2287,7 @@ declare namespace xml {
     export interface XMLDocument {
         createElement(name: string): XMLElement
         selectElement(name: string): XMLElement
-        toString(): string
+        string(): string
     }
 
     export interface XMLElement {

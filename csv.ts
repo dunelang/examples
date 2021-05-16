@@ -1,7 +1,7 @@
 import "native"
 
 function main() {
-    let fs = io.newMemFS()
+    let fs = io.newVirtualFS()
     let file = fs.openForWrite("test.csv")
 
     let w = csv.newWriter(file)

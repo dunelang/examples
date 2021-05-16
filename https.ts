@@ -12,7 +12,7 @@ export function main() {
 
     let req = http.newRequest("GET", "https://localhost:8080")
     for (let i = 0; i < 10; i++) {
-        console.log(req.mustExecute(1 * time.Second, tls.newConfig(true)))
+        console.log(req.execute(1 * time.Second, tls.newConfig(true)))
     }
 }
 

@@ -6,7 +6,7 @@ function main() {
   let person = people.createElement("Person")
   person.createAttribute("age", "33")
   person.setValue("John")
-  fmt.println(doc.toString())
+  fmt.println(doc.string())
 
 
   doc = xml.readString(`<bookstore xmlns:p="urn:schemas-books-com:prices">    

@@ -1,5 +1,5 @@
 export function main() {
-    let fs = io.newMemFS()
+    let fs = io.newVirtualFS()
     let w = fs.openForWrite("foo.zip")
     let zw = zip.newWriter(w)
 
